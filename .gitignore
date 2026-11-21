@@ -1,0 +1,12 @@
+.env
+.env.*
+!.env.example
+*.bak
+*.bak-*
+artifacts/
+baseline-*.json
+*.sql
+*.sql.gz
+*.tgz
+*.log
+.DS_Store
