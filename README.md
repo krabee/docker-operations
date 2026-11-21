@@ -23,6 +23,7 @@ report with before/after evidence and a rollback line on every change.
 | Report template | forces evidence + rollback into every change note |
 | Escalation | what a PM may do alone vs. must hand to IT |
 | Extension contract | how to add a per-app "spoke" skill without leaking host data into the shared file |
+| PM cheat sheet | `references/pm-cheatsheet.md` — print to A4: what to look at, what to collect before calling IT |
 
 ## Install
 
@@ -34,7 +35,8 @@ cp -r docker-operations ~/.hermes/skills/devops/
 cp -r docker-operations ~/.claude/skills/
 ```
 
-The skill is self-contained: `SKILL.md` only. No scripts, no network calls, no dependencies.
+The skill is `SKILL.md` plus two optional extras: `references/pm-cheatsheet.md` (a one-page A4 for PMs) and
+`scripts/scan-secrets.sh` (the pre-push guard). No network calls, no dependencies.
 
 ## Safety
 

@@ -1,7 +1,7 @@
 ---
 name: docker-operations
-description: Use when operating a Docker host: safe ops, backups.
-version: 1.0.0
+description: "Use when operating a Docker host: safe ops, backups."
+version: 1.1.1
 author: krabee
 license: MIT
 metadata:
@@ -42,7 +42,7 @@ Hub skill สำหรับ **ทุกงาน Docker/Compose บนโฮส
 3. **ห้าม `docker compose down`** ใน stack ที่มีข้อมูลจริง — ใช้ `stop <service>` หรือ `up -d <service>` แทน
 4. **ห้ามลบ volume / image / container ที่ไม่แน่ใจ** — `rm`, `rmi`, `prune`, `down -v` = ต้องขออนุมัติ + backup ก่อน
 5. **secret อยู่ใน `.env` เท่านั้น** — ห้าม hardcode ใน compose, ห้าม commit, ห้ามพิมพ์ลงแชท
-6. **ทุกครั้งที่แก้ ต้องรายงาน 5 อย่าง**: อะไรเปลี่ยน / คำสั่งที่รัน / ผลก่อน / ผลหลัง / วิธี rollback
+6. **ทุกครั้งที่แก้ ต้องรายงานครบทุกช่องตามเทมเพลต §10** (ก่อนแก้ / คำสั่ง / ผล / หลังแก้ / กระทบอะไร / rollback)
 7. **ไม่แน่ใจ = หยุดแล้วถาม** การหยุดถือว่าถูกต้องเสมอ; การเดาแล้วรันถือว่าผิด
 
 ## 3. คำศัพท์ 60 วินาที
@@ -57,7 +57,8 @@ Hub skill สำหรับ **ทุกงาน Docker/Compose บนโฮส
 | **Host port : Container port** | `8080:80` = เปิดประตูบ้านเลข 8080 เข้าห้อง 80 | เบอร์บ้าน vs เบอร์ห้อง |
 | **`.env`** | ไฟล์รหัสผ่าน/ค่าตั้ง ที่ไม่ถูก commit | สมุดรหัสในลิ้นชัก |
 
-> จำง่าย ๆ: **ลบ container = ไม่เสียข้อมูล** (ถ้าข้อมูลอยู่ใน volume) แต่ **ลบ volume = ข้อมูลหายจริง**
+> จำง่าย ๆ: **ลบ container = ไม่เสียข้อมูล** (ถ้าข้อมูลอยู่ใน named volume) แต่ **ลบ volume = ข้อมูลหายจริง**
+> ⚠️ ข้อยกเว้น: `docker rm -v` ลบ **anonymous volume** ไปด้วย — ถ้าไม่รู้ว่า volume ตัวไหนเป็น anonymous ให้ใช้ `docker rm` เปล่า ๆ
 
 ## 4. ระดับความเสี่ยงของคำสั่ง
 
@@ -67,11 +68,14 @@ docker ps                                    # container ที่รันอ�
 docker ps -a                                 # รวมที่หยุดไปแล้ว
 docker ps --format '{{.Names}}\t{{.Status}}\t{{.Ports}}'
 docker compose ls -a                         # ทุก project + ไฟล์ compose ที่ใช้
-docker inspect <ctr>                         # ค่าระเอียด (ports, mounts, env)
+docker inspect <ctr>                         # ค่ารายละเอียด (ports, mounts, env)
 docker logs --tail 100 <ctr>
 docker logs --since 24h <ctr> 2>&1 | grep -iE 'error|fatal|panic'
+docker logs -f <ctr>                         # อ่านสด ต้องออกด้วย Ctrl-C
+docker compose config --quiet                # ตรวจ compose ว่าถูกไวยากรณ์ (ไม่แตะอะไร)
+docker compose pull <service>                # ดาวน์โหลด image ใหม่ (ยังไม่เปลี่ยนของที่รัน)
 docker stats --no-stream
-docker df   →  docker system df
+docker system df                            # Docker กินพื้นที่เท่าไหร่ (พื้นที่ว่างดิสก์ = df -h)
 docker image ls --digests
 docker volume ls
 docker network ls
@@ -82,8 +86,6 @@ docker network ls
 docker compose up -d <service>        # สร้าง/อัปเดตเฉพาะ service นั้น
 docker compose restart <service>      # ไม่ลบ container, ข้อมูลอยู่
 docker compose stop|start <service>   # หยุด/เริ่ม ไม่ลบ
-docker compose pull <service>          # ดึง image ใหม่ (ยังไม่เปลี่ยนของที่รัน)
-docker logs -f <ctr>                   # ต้องออกด้วย Ctrl-C
 ```
 กติกาเหลือง: **1 service ต่อ 1 ครั้ง** + `--dry-run`/`config` ก่อนถ้ามี + read-back หลังทำเสมอ
 
@@ -115,8 +117,8 @@ docker exec ... rm / mv / dd / chmod -R
 # ภาพรวมทั้งเครื่องใน 1 บรรทัด
 docker ps --format '{{.Names}}@@{{.Image}}@@{{.Status}}@@{{.Ports}}'
 
-# ใครเปิดประตูออกนอก (0.0.0.0 = เปิดให้ทั้ง LAN/เน็ต)
-docker ps --format '{{.Names}}\t{{.Ports}}' | grep -v '127.0.0.1'
+# ใครเปิดประตูออกนอก — 0.0.0.0 = IPv4 ทุก interface, [::] = IPv6 ก็เปิดด้วย (เจออันใดอันหนึ่ง = เปิด)
+docker ps --format '{{.Names}}\t{{.Ports}}' | grep -vE '127\.0\.0\.1|\[::1\]'
 
 # image ที่รันจริง Pin digest หรือยัง
 docker ps --format '{{.Image}}' | grep -v '@sha256'     # มีผล = ยังไม่ pin
@@ -142,7 +144,7 @@ docker exec <ctr> ls -ln /path
 | ดูว่าระบบล่มเพราะอะไร | `ps -a` → `logs --tail 100` → `inspect` | ไม่ |
 | restart 1 service | `compose stop <s>` → `compose up -d <s>` → `logs` | ไม่ (แต่เก็บ baseline) |
 | อัปเดต image 1 service | baseline → `compose pull <s>` → `up -d <s>` → verify version ใน log | **ใช่** (DB ก่อน) |
-| backup ฐานข้อมูล | `docker exec -T <db> <dump cmd> > file.sql.gz` แล้ว `gzip -t` | — |
+| backup ฐานข้อมูล | `docker exec -T <db> <dump cmd> | gzip > file-<YYYYMMDD>.sql.gz` แล้ว `gzip -t` | — |
 | backup volume/ไฟล์ | `docker run --rm -v <vol>:/data -v $PWD:/out alpine tar czf /out/<vol>.tgz -C /data .` | — |
 | จะลบ image ที่ไม่ใช้ | `docker ps -a --filter ancestor=<image>` **ต้องว่าง** ก่อน `rmi` | ใช่ |
 
@@ -154,14 +156,14 @@ docker exec <ctr> ls -ln /path
 2. **Restart loop** → มัก config ผิด/ไฟล์สิทธิ์ผิด; `docker logs --tail 80`, และ `nginx -t` / `compose config --quiet` ตามชนิด service
 3. **เว็บได้ 502 / refused** → เช็ค 3 ชั้น: container รันอยู่ไหม → port mapping ถูกไหม → proxy (Caddy/nginx/cloudflared) ต่อถึง origin ไหม
 4. **ดิสก์เต็ม** → `docker system df -v` → หา log/volume โต → **ห้าม prune ก่อนอนุมัติ**
-5. **"/wp ไม่มีคำสั่ง" / exec ไม่ได้** → image ไม่มี tool นั้น (official `wordpress` ไม่มี wp-cli), distroless exec ไม่ได้ → ใช้ `docker run --network container:<x>` หรืออ่านจาก volume
+5. **`docker exec` แล้วขึ้น command not found / exec ไม่ได้** → image ไม่มี tool นั้น, distroless exec ไม่ได้เลย → `docker run --rm --network container:<ctr> <image> <cmd>` ชั่วคราว หรืออ่านจาก volume แทน
 
 ## 9. กับดักที่เจอจริง (pitfalls — เก็บจากงานจริง)
 
 **Compose**
-1. `docker compose up -d` **recrate ทุก service ที่ image เปลี่ยน** ไม่ใช่แค่ตัวที่ระบุ — ถ้าจะอัปแค่ตัวเดียว ให้ระบุชื่อ service เสมอ
+1. `docker compose up -d` **โดยไม่ระบุชื่อ service** = สร้าง/recreate **ทุก service ที่ image หรือ config เปลี่ยน** — ถ้าจะแตะตัวเดียว ต้องระบุชื่อเสมอ (`up -d <service>` แตะเฉพาะตัวนั้น)
 2. `docker compose down` หยุด **ทั้ง project** — ใช้ `stop <service>` แทน
-3. Volume ผูกกับ **ชื่อ project** (`-p <name>`); เปลี่ยนชื่อ project = เห็นข้อมูลเป็นชุดใหม่ (เหมือนข้อมูลหาย)
+3. Volume ผูกกับ **ชื่อ project** (`-p <name>`); เปลี่ยนชื่อ project = มองไม่เห็นข้อมูลชุดเดิม — **ข้อมูลยังอยู่ ไม่ได้หาย** กู้ได้ถ้ารู้ชื่อ volume เดิม (`docker volume ls`)
 4. แยก project ออกจากกัน = **เรียกกันด้วยชื่อ service ไม่ได้** ต้องใช้ IP/port
 5. แก้ไฟล์ใน container ด้วย `docker exec` **หายเมื่อ recreate** — แก้ที่ host/ไฟล์ compose เท่านั้น
 6. `docker compose run --rm` **ไม่ใช้ env ของ service** ถ้าไม่ได้ส่ง `env_file`/env ไปเอง
@@ -170,7 +172,7 @@ docker exec <ctr> ls -ln /path
 7. สมาชิกกลุ่ม `docker` = เทียบเท่า **root** (mount `/` ได้) → การให้สิทธิ์ต้องคิดเหมือนให้ root
 8. `docker ps --format` **ไม่มี** `.NetworkSettings` → ต้อง `docker inspect`
 9. `docker exec` เขียนไฟล์ออกมาเป็น **root-owned** → ภายหลัง service เขียนทับไม่ได้
-10. `docker logs` ของ subprocess อยู่ที่ **stdout** ไม่ใช่ stderr
+10. อ่าน `docker logs` ด้วยสคริปต์ (Python `subprocess`) ข้อความอยู่ใน **`.stdout`** ไม่ใช่ `.stderr` — เช็คผิดช่องจะว่างแล้วสรุปผิดว่าไม่มี error
 11. rule firewall ของ Docker อยู่ใน kernel — **หายเมื่อ reboot**; ใส่ได้ที่ `DOCKER-USER` เท่านั้น, Docker ล้าง chain อื่นทิ้งทุกครั้งที่ start, และ `--dport` คือ **port ใน container** ไม่ใช่ host port
 12. image ที่ไม่ pin digest = เปลี่ยนเองได้ทุกเมื่อ → pin `@sha256:` เสมอสำหรับ production
 
@@ -209,16 +211,22 @@ skills/devops/<app>-operations/SKILL.md
 ```
 กติกา: SKILL.md กลาง = วิธีทำ (generic) · spoke = ข้อมูลจริงของไซต์ · memory = pointer เท่านั้น
 
-## 13. References / Scripts (แผน)
+## 13. References / Scripts
 
-- `references/pm-cheatsheet.md` — 1 หน้า A4 สำหรับ PM (คำสั่งเขียว + เทมเพลตรายงาน)
-- `references/compose-safety.md` — project/volume/recreate/port mapping + ตัวอย่าง diff
-- `references/troubleshooting-decision-tree.md` — อาการ → ขั้นตอนไล่ → หลักฐานที่ต้องเก็บ
-- `references/docker-firewall-and-ports.md` — DOCKER-USER, host vs container port, persist หลัง reboot
-- `scripts/docker-baseline.sh` — เก็บ baseline (ps -a / inspect / df / image digests) เป็น JSON
-- `scripts/docker-backup-volume.sh` — tar volume + `gzip -t` verify + ชื่อไฟล์มีวันที่
-- `scripts/compose-plan.sh` — `config --quiet` + แสดงว่าจะ recreate service ใด
+**มีแล้ว — โหลดได้เลย**
+- `references/pm-cheatsheet.md` — 1 หน้า A4 สำหรับ PM: คำสั่งอ่านสถานะ, 4 อย่างที่ต้องเก็บก่อนแจ้งปัญหา, สูตร restart, เทมเพลตรายงาน, ตารางว่าโทรหาใคร
+- `scripts/scan-secrets.sh` — pre-push guard ใช้ทุกครั้งที่แชร์ไฟล์/สกิลออกนอกบ้าน (exit 1 = พบ pattern ที่ต้องตรวจ)
+
+**ยังไม่มี — ทำเมื่อต้องใช้จริง และห้ามอ้างถึงเหมือนมีอยู่** (อย่าเขียนชื่อไฟล์แบบมีพาธจนกว่าจะสร้างจริง)
+- compose safety: project/volume/recreate/port mapping + ตัวอย่าง diff
+- troubleshooting decision tree: อาการ → ขั้นตอนไล่ → หลักฐานที่ต้องเก็บ
+- firewall & ports: DOCKER-USER, host vs container port, persist หลัง reboot
+- สคริปต์: baseline (`ps -a` / inspect / df / digests) · backup-volume (tar + `gzip -t`) · compose-plan (`config --quiet` + ใครจะ recreate)
+
+**Sync rule:** สำเนาในเครื่อง (`skills/devops/docker-operations/`) กับ repo สาธารณะต้องตรงกัน — เพิ่ม/แก้ reference หรือ script ที่นี่แล้วต้อง push ขึ้น repo ด้วย ไม่งั้นสองฝั่งจะเพี้ยนแบบเงียบ ๆ
 
 ## 14. Changelog
 
+- 1.1.1 — แก้ข้อบกพร่องจาก content review: `docker df` (ไม่มีคำสั่งนี้) · คำสั่ง `pull`/`logs -f` ถูกจัดชั้นผิด · สูตร backup DB ไม่ gzip · ข้อความ up -d กำกวมเรื่อง scope · typo `recrate`/`ค่าระเอียด` · เติม IPv6 `[::]` ในการตรวจ port · ระบุว่าเปลี่ยนชื่อ project ไม่ได้ทำข้อมูลหาย
+- 1.1.0 — เพิ่ม `references/pm-cheatsheet.md` (1 หน้า A4 สำหรับ PM) และระบุใน §13 ชัดเจนว่าอะไรมีจริง/อะไรยังเป็นแผน; รอ push ขึ้น repo สาธารณะ
 - 1.0.0 — ฉบับแรกสำหรับเผยแพร่ (sanitized: ไม่มีชื่อบริษัท/โฮสต์/บัญชีผู้ใช้/IP)
